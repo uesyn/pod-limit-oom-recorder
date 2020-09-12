@@ -1,0 +1,37 @@
+name: build-and-push
+on: push
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Prepare
+      id: prep
+      run: |
+        DOCKER_IMAGE=ghcr.io/uesyn/pod-limit-recorder
+        VERSION=latest
+        if [[ $GITHUB_REF == refs/heads/* ]] && [[ ! $GITHUB_REF == refs/heads/master ]]; then
+          VERSION=${GITHUB_REF#refs/heads/}-latest
+        fi
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        TAGS="${DOCKER_IMAGE}:${VERSION}"
+        echo ::set-output name=tags::${TAGS}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.CR_PAT }}
+      if: ${{ github.event_name != 'pull_request' }}
+    - name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        platforms: linux/amd64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.prep.outputs.tags }}
